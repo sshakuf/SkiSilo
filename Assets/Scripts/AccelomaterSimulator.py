@@ -38,28 +38,28 @@ label.pack()
 
 # Sliders for Left Leg
 tk.Label(root, text="Left Leg X").pack()
-left_x_slider = tk.Scale(root, from_=-90, to=90, orient="horizontal", command=lambda v: update_value("left_x", v))
+left_x_slider = tk.Scale(root, from_=-180, to=180, orient="horizontal", command=lambda v: update_value("left_x", v))
 left_x_slider.pack()
 
 tk.Label(root, text="Left Leg Y").pack()
-left_y_slider = tk.Scale(root, from_=-90, to=90, orient="horizontal", command=lambda v: update_value("left_y", v))
+left_y_slider = tk.Scale(root, from_=-180, to=180, orient="horizontal", command=lambda v: update_value("left_y", v))
 left_y_slider.pack()
 
 tk.Label(root, text="Left Leg Z").pack()
-left_z_slider = tk.Scale(root, from_=-90, to=90, orient="horizontal", command=lambda v: update_value("left_z", v))
+left_z_slider = tk.Scale(root, from_=-180, to=180, orient="horizontal", command=lambda v: update_value("left_z", v))
 left_z_slider.pack()
 
 # Sliders for Right Leg
 tk.Label(root, text="Right Leg X").pack()
-right_x_slider = tk.Scale(root, from_=-90, to=90, orient="horizontal", command=lambda v: update_value("right_x", v))
+right_x_slider = tk.Scale(root, from_=-180, to=180, orient="horizontal", command=lambda v: update_value("right_x", v))
 right_x_slider.pack()
 
 tk.Label(root, text="Right Leg Y").pack()
-right_y_slider = tk.Scale(root, from_=-90, to=90, orient="horizontal", command=lambda v: update_value("right_y", v))
+right_y_slider = tk.Scale(root, from_=-180, to=180, orient="horizontal", command=lambda v: update_value("right_y", v))
 right_y_slider.pack()
 
 tk.Label(root, text="Right Leg Z").pack()
-right_z_slider = tk.Scale(root, from_=-90, to=90, orient="horizontal", command=lambda v: update_value("right_z", v))
+right_z_slider = tk.Scale(root, from_=-180, to=180, orient="horizontal", command=lambda v: update_value("right_z", v))
 right_z_slider.pack()
 
 # Run UI loop
