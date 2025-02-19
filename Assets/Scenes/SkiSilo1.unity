@@ -583,8 +583,11 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: a633e78104d594ab89ddc79186150d31, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+  character: {fileID: 543450652560205879}
   leftLeg: {fileID: 1509909595}
   rightLeg: {fileID: 272986076}
+  positionScale: 1
+  smoothing: 10
 --- !u!114 &1253994006
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -597,8 +600,11 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: a633e78104d594ab89ddc79186150d31, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+  character: {fileID: 0}
   leftLeg: {fileID: 0}
   rightLeg: {fileID: 0}
+  positionScale: 1
+  smoothing: 10
 --- !u!1 &1374629680 stripped
 GameObject:
   m_CorrespondingSourceObject: {fileID: 919132149155446097, guid: 24fc2c3e62c52bf4e9e63fd980b8e85d, type: 3}
@@ -616,8 +622,11 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: a633e78104d594ab89ddc79186150d31, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+  character: {fileID: 0}
   leftLeg: {fileID: 908843384}
   rightLeg: {fileID: 1835025639}
+  positionScale: 1
+  smoothing: 10
 --- !u!1 &1509909594
 GameObject:
   m_ObjectHideFlags: 0
@@ -807,8 +816,11 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: a633e78104d594ab89ddc79186150d31, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+  character: {fileID: 0}
   leftLeg: {fileID: 1835025639}
   rightLeg: {fileID: 908843384}
+  positionScale: 1
+  smoothing: 10
 --- !u!114 &2002776750
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -821,8 +833,11 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: a633e78104d594ab89ddc79186150d31, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+  character: {fileID: 0}
   leftLeg: {fileID: 2002776747}
   rightLeg: {fileID: 2002776746}
+  positionScale: 1
+  smoothing: 10
 --- !u!4 &543450652560205879
 Transform:
   m_ObjectHideFlags: 0
@@ -852,7 +867,7 @@ GameObject:
   - component: {fileID: 1253994006}
   - component: {fileID: 1253994005}
   m_Layer: 0
-  m_Name: 12322_Skis_v1_l3
+  m_Name: MainCharecter
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0

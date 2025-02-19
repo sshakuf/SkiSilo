@@ -6,6 +6,36 @@ using System.Threading;
 using System.Collections.Generic;
 using System;
 
+[Serializable]
+public class MotionData
+{
+    public LegsData legs;
+    public PositionData position;
+}
+
+[Serializable]
+public class LegsData
+{
+    public RotationData left;
+    public RotationData right;
+}
+
+[Serializable]
+public class RotationData
+{
+    public float pitch;
+    public float yaw;
+    public float roll;
+}
+
+[Serializable]
+public class PositionData
+{
+    public float x;
+    public float y;
+    public float z;
+}
+
 public class UDPModel : MonoBehaviour
 {
     [SerializeField] private int port = 5005;
@@ -15,6 +45,7 @@ public class UDPModel : MonoBehaviour
     private readonly Queue<Action> _mainThreadActions = new Queue<Action>();
 
     public static event Action<Quaternion, Quaternion> OnDataReceived;
+    public static event Action<Vector3> OnPositionReceived;
 
     private void Start()
     {
@@ -26,11 +57,9 @@ public class UDPModel : MonoBehaviour
     {
         try
         {
-            // Allow binding to any available address
             udpClient = new UdpClient(new IPEndPoint(IPAddress.Any, port));
             Debug.Log($"UDP listening on port {port}");
             
-            // Print all available IP addresses for debugging
             var host = Dns.GetHostEntry(Dns.GetHostName());
             foreach (var ip in host.AddressList)
             {
@@ -59,18 +88,18 @@ public class UDPModel : MonoBehaviour
             try
             {
                 byte[] data = udpClient.Receive(ref remoteEndPoint);
-                string message = Encoding.UTF8.GetString(data);
+                string json = Encoding.UTF8.GetString(data);
                 
-                Debug.Log($"Received data from {remoteEndPoint.Address}: {message}");
+                Debug.Log($"Received from {remoteEndPoint.Address}: {json}");
 
                 lock (_mainThreadActions)
                 {
-                    _mainThreadActions.Enqueue(() => ProcessData(message));
+                    _mainThreadActions.Enqueue(() => ProcessJsonData(json));
                 }
             }
             catch (Exception e)
             {
-                if (isRunning) // Only log if we're still supposed to be running
+                if (isRunning)
                 {
                     Debug.LogError($"Error receiving data: {e}");
                 }
@@ -78,38 +107,45 @@ public class UDPModel : MonoBehaviour
         }
     }
 
-    private void ProcessData(string message)
+    private void ProcessJsonData(string json)
     {
         try
         {
-            string[] values = message.Split(',');
-            if (values.Length == 6)
+            MotionData motionData = JsonUtility.FromJson<MotionData>(json);
+            
+            // Process leg rotations
+            if (motionData.legs != null)
             {
-                if (float.TryParse(values[0], out float leftX) &&
-                    float.TryParse(values[1], out float leftY) &&
-                    float.TryParse(values[2], out float leftZ) &&
-                    float.TryParse(values[3], out float rightX) &&
-                    float.TryParse(values[4], out float rightY) &&
-                    float.TryParse(values[5], out float rightZ))
-                {
-                    Quaternion leftRotation = Quaternion.Euler(leftX, leftY, leftZ);
-                    Quaternion rightRotation = Quaternion.Euler(rightX, rightY, rightZ);
+                Quaternion leftRotation = Quaternion.Euler(
+                    motionData.legs.left.pitch,
+                    motionData.legs.left.yaw,
+                    motionData.legs.left.roll
+                );
 
-                    OnDataReceived?.Invoke(leftRotation, rightRotation);
-                }
-                else
-                {
-                    Debug.LogError($"Failed to parse values from message: {message}");
-                }
+                Quaternion rightRotation = Quaternion.Euler(
+                    motionData.legs.right.pitch,
+                    motionData.legs.right.yaw,
+                    motionData.legs.right.roll
+                );
+
+                OnDataReceived?.Invoke(leftRotation, rightRotation);
             }
-            else
+
+            // Process position
+            if (motionData.position != null)
             {
-                Debug.LogError($"Incorrect number of values in message. Expected 6, got {values.Length}");
+                Vector3 position = new Vector3(
+                    motionData.position.x,
+                    motionData.position.y,
+                    motionData.position.z
+                );
+
+                OnPositionReceived?.Invoke(position);
             }
         }
         catch (Exception e)
         {
-            Debug.LogError($"Error processing data: {e}\nMessage: {message}");
+            Debug.LogError($"Error processing JSON data: {e}\nJSON: {json}");
         }
     }
 
@@ -129,7 +165,7 @@ public class UDPModel : MonoBehaviour
         isRunning = false;
         if (receiveThread != null && receiveThread.IsAlive)
         {
-            receiveThread.Join(1000); // Wait up to 1 second for the thread to finish
+            receiveThread.Join(1000);
             if (receiveThread.IsAlive)
             {
                 receiveThread.Abort();

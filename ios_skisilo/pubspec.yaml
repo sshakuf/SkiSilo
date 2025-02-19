@@ -30,7 +30,7 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
-  sensors_plus: ^3.0.3 # For accessing accelerometer and gyroscope
+  sensors_plus: ^6.1.1 # For accessing accelerometer and gyroscope
   udp: ^5.0.0 # For sending data via UDP over WiFi
 
   # The following adds the Cupertino Icons font to your application.

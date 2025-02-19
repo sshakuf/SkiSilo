@@ -1,52 +1,94 @@
 using UnityEngine;
-using System.Net;
-using System.Net.Sockets;
-using System.Text;
-using System.Threading;
-using System.Collections.Generic;
-using System;
 
 public class LegController : MonoBehaviour
 {
+    [Header("Character Components")]
+    public Transform character;
     public Transform leftLeg;
     public Transform rightLeg;
 
+    [Header("Motion Settings")]
+    [SerializeField] private float positionScale = 1f;
+    [SerializeField] private float smoothing = 10f;
+
     private Quaternion initialLeftRotation;
     private Quaternion initialRightRotation;
+    private Vector3 initialPosition;
+    
     private Quaternion targetLeftRotation;
     private Quaternion targetRightRotation;
-    private bool hasNewData = false;
+    private Vector3 targetPosition;
+    
+    private bool hasNewRotationData = false;
+    private bool hasNewPositionData = false;
 
     private void Start()
     {
-        initialLeftRotation = leftLeg.rotation;
-        initialRightRotation = rightLeg.rotation;
+        if (leftLeg) initialLeftRotation = leftLeg.rotation;
+        if (rightLeg) initialRightRotation = rightLeg.rotation;
+        if (character) initialPosition = character.position;
+        
+        targetPosition = initialPosition;
     }
 
     private void OnEnable()
     {
         UDPModel.OnDataReceived += HandleNewRotationData;
+        UDPModel.OnPositionReceived += HandleNewPositionData;
     }
 
     private void OnDisable()
     {
         UDPModel.OnDataReceived -= HandleNewRotationData;
+        UDPModel.OnPositionReceived -= HandleNewPositionData;
     }
 
     private void HandleNewRotationData(Quaternion leftRotation, Quaternion rightRotation)
     {
-        targetLeftRotation = initialLeftRotation * leftRotation;
-        targetRightRotation = initialRightRotation * rightRotation;
-        hasNewData = true;
+        if (leftLeg) targetLeftRotation = initialLeftRotation * leftRotation;
+        if (rightLeg) targetRightRotation = initialRightRotation * rightRotation;
+        hasNewRotationData = true;
+    }
+
+    private void HandleNewPositionData(Vector3 newPosition)
+    {
+        if (character)
+        {
+            targetPosition = initialPosition + (newPosition * positionScale);
+            hasNewPositionData = true;
+        }
     }
 
     private void LateUpdate()
     {
-        if (hasNewData)
+        if (hasNewRotationData)
         {
-            leftLeg.rotation = targetLeftRotation;
-            rightLeg.rotation = targetRightRotation;
-            hasNewData = false;
+            if (leftLeg)
+            {
+                leftLeg.rotation = Quaternion.Lerp(
+                    leftLeg.rotation,
+                    targetLeftRotation,
+                    Time.deltaTime * smoothing
+                );
+            }
+
+            if (rightLeg)
+            {
+                rightLeg.rotation = Quaternion.Lerp(
+                    rightLeg.rotation,
+                    targetRightRotation,
+                    Time.deltaTime * smoothing
+                );
+            }
+        }
+
+        if (hasNewPositionData && character)
+        {
+            character.position = Vector3.Lerp(
+                character.position,
+                targetPosition,
+                Time.deltaTime * smoothing
+            );
         }
     }
 }
