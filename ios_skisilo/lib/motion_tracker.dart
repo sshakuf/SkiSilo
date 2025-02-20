@@ -5,6 +5,10 @@ import 'dart:math' as math;
 import 'dart:convert';
 import 'sensor_service.dart';
 
+import 'dart:io';
+import 'package:path_provider/path_provider.dart';
+import 'package:intl/intl.dart';
+
 class MotionTracker extends StatefulWidget {
   @override
   _MotionTrackerState createState() => _MotionTrackerState();
@@ -52,6 +56,11 @@ class _MotionTrackerState extends State<MotionTracker> {
   StreamSubscription<GyroscopeEvent>? gyroSubscription;
   StreamSubscription<UserAccelerometerEvent>? userAccelSubscription;
   DateTime? lastUpdateTime;
+
+  bool isRecording = false;
+  List<Map<String, dynamic>> recordedData = [];
+  Timer? recordingTimer;
+  static const int RECORDING_INTERVAL_MS = 100; // 10Hz recording rate
 
   @override
   void initState() {
@@ -116,6 +125,15 @@ class _MotionTrackerState extends State<MotionTracker> {
           }
           sendData();
         });
+        // Add this at the end of your listener
+        if (isRecording && recordedData.isNotEmpty) {
+          final lastIndex = recordedData.length - 1;
+          recordedData[lastIndex]['accel'] = {
+            'x': event.x,
+            'y': event.y,
+            'z': event.z,
+          };
+        }
       }),
     );
 
@@ -167,6 +185,14 @@ class _MotionTrackerState extends State<MotionTracker> {
           }
         }
         lastUpdateTime = now;
+        if (isRecording && recordedData.isNotEmpty) {
+          final lastIndex = recordedData.length - 1;
+          recordedData[lastIndex]['gyro'] = {
+            'x': event.x,
+            'y': event.y,
+            'z': event.z,
+          };
+        }
       }),
     );
   }
@@ -205,6 +231,73 @@ class _MotionTrackerState extends State<MotionTracker> {
     });
   }
 
+  void startRecording() {
+    recordedData.clear();
+    isRecording = true;
+
+    // Setup timer to record at regular intervals
+    recordingTimer = Timer.periodic(
+      Duration(milliseconds: RECORDING_INTERVAL_MS),
+      (_) {
+        if (!isRecording) return;
+
+        recordedData.add({
+          'timestamp': DateTime.now().millisecondsSinceEpoch,
+          'gyro': {
+            'x': 0.0,
+            'y': 0.0,
+            'z': 0.0,
+          }, // Will populate in sensor callbacks
+          'accel': {
+            'x': 0.0,
+            'y': 0.0,
+            'z': 0.0,
+          }, // Will populate in sensor callbacks
+          'orientation': {'roll': roll, 'pitch': pitch, 'yaw': yaw},
+          'position': {'x': posX, 'y': posY, 'z': posZ},
+        });
+      },
+    );
+  }
+
+  void stopRecordingAndSave() async {
+    isRecording = false;
+    recordingTimer?.cancel();
+    recordingTimer = null;
+
+    if (recordedData.isEmpty) return;
+
+    try {
+      final directory = await getApplicationDocumentsDirectory();
+      final timestamp = DateFormat('yyyyMMdd_HHmmss').format(DateTime.now());
+      final path = '${directory.path}/motion_data_$timestamp.json';
+
+      final file = File(path);
+      await file.writeAsString(jsonEncode(recordedData));
+
+      // Show success message
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Recording saved to: $path'),
+            duration: Duration(seconds: 3),
+          ),
+        );
+      }
+    } catch (e) {
+      // Show error message
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to save recording: $e'),
+            backgroundColor: Colors.red,
+            duration: Duration(seconds: 3),
+          ),
+        );
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -218,6 +311,25 @@ class _MotionTrackerState extends State<MotionTracker> {
                 child: Text('Calibrating...'),
               ),
             ),
+          // Recording button
+          IconButton(
+            icon: Icon(
+              isRecording ? Icons.stop_circle : Icons.fiber_manual_record,
+              color: isRecording ? Colors.red : null,
+            ),
+            onPressed:
+                isCalibrating
+                    ? null
+                    : () {
+                      setState(() {
+                        if (isRecording) {
+                          stopRecordingAndSave();
+                        } else {
+                          startRecording();
+                        }
+                      });
+                    },
+          ),
           IconButton(
             icon: Icon(
               isTrackingLocation ? Icons.location_on : Icons.location_off,
@@ -319,6 +431,7 @@ class _MotionTrackerState extends State<MotionTracker> {
 
   @override
   void dispose() {
+    recordingTimer?.cancel();
     gyroSubscription?.cancel();
     userAccelSubscription?.cancel();
     for (final subscription in _streamSubscriptions) {
