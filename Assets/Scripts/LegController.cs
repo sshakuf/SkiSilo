@@ -2,61 +2,70 @@ using UnityEngine;
 
 public class LegController : MonoBehaviour
 {
-    [Header("Character Components")]
-    public Transform character;
+    [Header("Leg Components")]
     public Transform leftLeg;
     public Transform rightLeg;
 
     [Header("Motion Settings")]
-    [SerializeField] private float positionScale = 1f;
     [SerializeField] private float smoothing = 10f;
+    [SerializeField] private float accelerationScale = 1f; // Scale for acceleration movement
+    [SerializeField] private float returnSpeed = 5f; // Speed to return to the base position
 
     private Quaternion initialLeftRotation;
     private Quaternion initialRightRotation;
-    private Vector3 initialPosition;
+    
+    private Vector3 initialLeftPosition;
+    private Vector3 initialRightPosition;
     
     private Quaternion targetLeftRotation;
     private Quaternion targetRightRotation;
-    private Vector3 targetPosition;
-    
+
+    private Vector3 leftAcceleration;
+    private Vector3 rightAcceleration;
+
     private bool hasNewRotationData = false;
-    private bool hasNewPositionData = false;
+    private bool hasNewAccelerationData = false;
 
     private void Start()
     {
-        if (leftLeg) initialLeftRotation = leftLeg.rotation;
-        if (rightLeg) initialRightRotation = rightLeg.rotation;
-        if (character) initialPosition = character.position;
-        
-        targetPosition = initialPosition;
+        if (leftLeg) 
+        {
+            initialLeftRotation = leftLeg.rotation;
+            initialLeftPosition = leftLeg.position;
+        }
+        if (rightLeg) 
+        {
+            initialRightRotation = rightLeg.rotation;
+            initialRightPosition = rightLeg.position;
+        }
     }
 
     private void OnEnable()
     {
-        UDPModel.OnDataReceived += HandleNewRotationData;
-        UDPModel.OnPositionReceived += HandleNewPositionData;
+        UDPModel.OnDataReceived += HandleNewMotionData;
     }
 
     private void OnDisable()
     {
-        UDPModel.OnDataReceived -= HandleNewRotationData;
-        UDPModel.OnPositionReceived -= HandleNewPositionData;
+        UDPModel.OnDataReceived -= HandleNewMotionData;
     }
 
-    private void HandleNewRotationData(Quaternion leftRotation, Quaternion rightRotation)
+    private void HandleNewMotionData(Quaternion leftRotation, Vector3 leftAcc, Quaternion rightRotation, Vector3 rightAcc)
     {
-        if (leftLeg) targetLeftRotation = initialLeftRotation * leftRotation;
-        if (rightLeg) targetRightRotation = initialRightRotation * rightRotation;
-        hasNewRotationData = true;
-    }
-
-    private void HandleNewPositionData(Vector3 newPosition)
-    {
-        if (character)
+        if (leftLeg) 
         {
-            targetPosition = initialPosition + (newPosition * positionScale);
-            hasNewPositionData = true;
+            targetLeftRotation = initialLeftRotation * leftRotation;
+            leftAcceleration = leftAcc * accelerationScale;
         }
+
+        if (rightLeg) 
+        {
+            targetRightRotation = initialRightRotation * rightRotation;
+            rightAcceleration = rightAcc * accelerationScale;
+        }
+
+        hasNewRotationData = true;
+        hasNewAccelerationData = true;
     }
 
     private void LateUpdate()
@@ -82,12 +91,44 @@ public class LegController : MonoBehaviour
             }
         }
 
-        if (hasNewPositionData && character)
+        if (hasNewAccelerationData)
         {
-            character.position = Vector3.Lerp(
-                character.position,
-                targetPosition,
-                Time.deltaTime * smoothing
+            ApplyAccelerationEffects();
+        }
+
+        ReturnToBasePosition();
+    }
+
+    private void ApplyAccelerationEffects()
+    {
+        if (leftLeg)
+        {
+            leftLeg.position = initialLeftPosition + leftAcceleration;
+        }
+
+        if (rightLeg)
+        {
+            rightLeg.position = initialRightPosition + rightAcceleration;
+        }
+    }
+
+    private void ReturnToBasePosition()
+    {
+        if (leftLeg)
+        {
+            leftLeg.position = Vector3.Lerp(
+                leftLeg.position,
+                initialLeftPosition,
+                Time.deltaTime * returnSpeed
+            );
+        }
+
+        if (rightLeg)
+        {
+            rightLeg.position = Vector3.Lerp(
+                rightLeg.position,
+                initialRightPosition,
+                Time.deltaTime * returnSpeed
             );
         }
     }

@@ -10,7 +10,6 @@ using System;
 public class MotionData
 {
     public LegsData legs;
-    public PositionData position;
 }
 
 [Serializable]
@@ -26,14 +25,9 @@ public class RotationData
     public float pitch;
     public float yaw;
     public float roll;
-}
-
-[Serializable]
-public class PositionData
-{
-    public float x;
-    public float y;
-    public float z;
+    public float accX;
+    public float accY;
+    public float accZ;
 }
 
 public class UDPModel : MonoBehaviour
@@ -44,8 +38,7 @@ public class UDPModel : MonoBehaviour
     private bool isRunning = true;
     private readonly Queue<Action> _mainThreadActions = new Queue<Action>();
 
-    public static event Action<Quaternion, Quaternion> OnDataReceived;
-    public static event Action<Vector3> OnPositionReceived;
+    public static event Action<Quaternion, Vector3, Quaternion, Vector3> OnDataReceived; // Left (rotation, acceleration) | Right (rotation, acceleration)
 
     private void Start()
     {
@@ -113,34 +106,35 @@ public class UDPModel : MonoBehaviour
         {
             MotionData motionData = JsonUtility.FromJson<MotionData>(json);
             
-            // Process leg rotations
             if (motionData.legs != null)
             {
+                // Left leg data
                 Quaternion leftRotation = Quaternion.Euler(
                     motionData.legs.left.pitch,
                     motionData.legs.left.yaw,
                     motionData.legs.left.roll
                 );
 
+                Vector3 leftAcceleration = new Vector3(
+                    motionData.legs.left.accX,
+                    motionData.legs.left.accY,
+                    motionData.legs.left.accZ
+                );
+
+                // Right leg data
                 Quaternion rightRotation = Quaternion.Euler(
                     motionData.legs.right.pitch,
                     motionData.legs.right.yaw,
                     motionData.legs.right.roll
                 );
 
-                OnDataReceived?.Invoke(leftRotation, rightRotation);
-            }
-
-            // Process position
-            if (motionData.position != null)
-            {
-                Vector3 position = new Vector3(
-                    motionData.position.x,
-                    motionData.position.y,
-                    motionData.position.z
+                Vector3 rightAcceleration = new Vector3(
+                    motionData.legs.right.accX,
+                    motionData.legs.right.accY,
+                    motionData.legs.right.accZ
                 );
 
-                OnPositionReceived?.Invoke(position);
+                OnDataReceived?.Invoke(leftRotation, leftAcceleration, rightRotation, rightAcceleration);
             }
         }
         catch (Exception e)

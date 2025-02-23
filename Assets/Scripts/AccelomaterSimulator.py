@@ -2,132 +2,137 @@ import socket
 import tkinter as tk
 import json
 
-# UDP Settings
-UDP_IP = "127.0.0.1"
-UDP_PORT = 5005
+class UDPHandler:
+    """Handles UDP communication for motion data."""
+    
+    def __init__(self, ip="127.0.0.1", port=5005):
+        self.UDP_IP = ip
+        self.UDP_PORT = port
+        self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 
-sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    def send_data(self, data):
+        """Send JSON data via UDP."""
+        json_data = json.dumps(data)
+        self.sock.sendto(json_data.encode(), (self.UDP_IP, self.UDP_PORT))
+    
+    def update_connection(self, ip, port):
+        """Update UDP IP and port settings."""
+        self.UDP_IP = ip
+        self.UDP_PORT = int(port)
 
-# Motion data structure
-motion_data = {
-    "legs": {
-        "left": {
-            "pitch": 0,
-            "yaw": 0,
-            "roll": 0
-        },
-        "right": {
-            "pitch": 0,
-            "yaw": 0,
-            "roll": 0
+class MotionSimulator:
+    def __init__(self):
+        # UDP Handler instance
+        self.udp_handler = UDPHandler()
+
+        # Motion data structure (legs only, no position)
+        self.motion_data = {
+            "legs": {
+                "left": {
+                    "pitch": 0, "yaw": 0, "roll": 0,
+                    "accX": 0, "accY": 0, "accZ": 0
+                },
+                "right": {
+                    "pitch": 0, "yaw": 0, "roll": 0,
+                    "accX": 0, "accY": 0, "accZ": 0
+                }
+            }
         }
-    },
-    "position": {
-        "x": 0,
-        "y": 0,
-        "z": 0
-    }
-}
 
-def send_data():
-    data = json.dumps(motion_data)
-    sock.sendto(data.encode(), (UDP_IP, UDP_PORT))
-    status_label.config(text=f"Last sent: {data}")
+        # Initialize UI
+        self.root = tk.Tk()
+        self.root.title("Motion Simulator")
 
-def update_leg(leg, axis, value):
-    motion_data["legs"][leg][axis] = float(value)
-    send_data()
+        self.main_container = tk.Frame(self.root)
+        self.main_container.pack(expand=True, fill='both', padx=10, pady=10)
 
-def update_position(axis, value):
-    motion_data["position"][axis] = float(value)
-    send_data()
+        self.status_label = tk.Label(self.main_container, text="Adjust sliders to simulate motion", font=("Arial", 10), wraplength=400)
+        self.status_label.pack(pady=5)
 
-# Create UI
-root = tk.Tk()
-root.title("Motion Simulator")
+        self.left_frame = tk.LabelFrame(self.main_container, text="Left Leg", padx=5, pady=5)
+        self.left_frame.pack(side=tk.LEFT, expand=True, fill='both', padx=5)
 
-# Main container
-main_container = tk.Frame(root)
-main_container.pack(expand=True, fill='both', padx=10, pady=10)
+        self.right_frame = tk.LabelFrame(self.main_container, text="Right Leg", padx=5, pady=5)
+        self.right_frame.pack(side=tk.LEFT, expand=True, fill='both', padx=5)
 
-# Status Label
-status_label = tk.Label(main_container, text="Adjust sliders to simulate motion", 
-                       font=("Arial", 10), wraplength=400)
-status_label.pack(pady=5)
+        self.create_sliders()
+        self.create_reset_button()
+        self.create_ip_config()
 
-# Create frames for left leg, right leg, and position
-left_frame = tk.LabelFrame(main_container, text="Left Leg", padx=5, pady=5)
-left_frame.pack(side=tk.LEFT, expand=True, fill='both', padx=5)
+        self.root.mainloop()
 
-right_frame = tk.LabelFrame(main_container, text="Right Leg", padx=5, pady=5)
-right_frame.pack(side=tk.LEFT, expand=True, fill='both', padx=5)
+    def send_data(self):
+        """Send motion data via UDP."""
+        self.udp_handler.send_data(self.motion_data)
+        self.status_label.config(text=f"Last sent: {json.dumps(self.motion_data)}")
 
-position_frame = tk.LabelFrame(main_container, text="Position", padx=5, pady=5)
-position_frame.pack(side=tk.LEFT, expand=True, fill='both', padx=5)
+    def update_leg(self, leg, axis, value):
+        """Update leg motion data."""
+        self.motion_data["legs"][leg][axis] = float(value)
+        self.send_data()
 
-def create_slider(parent, text, command):
-    frame = tk.Frame(parent)
-    frame.pack(fill='x', pady=2)
-    
-    label = tk.Label(frame, text=text, width=10)
-    label.pack(side=tk.LEFT)
-    
-    slider = tk.Scale(frame, from_=-180, to=180, orient="horizontal",
-                     command=command)
-    slider.pack(side=tk.LEFT, fill='x', expand=True)
-    return slider
+    def create_sliders(self):
+        """Create sliders for legs only."""
+        axes = ["pitch", "yaw", "roll", "accX", "accY", "accZ"]
+        for axis in axes:
+            self.create_slider(self.left_frame, f"L-{axis.capitalize()}",
+                               lambda v, a=axis: self.update_leg("left", a, v))
+            self.create_slider(self.right_frame, f"R-{axis.capitalize()}",
+                               lambda v, a=axis: self.update_leg("right", a, v))
 
-# Left Leg Controls
-for axis in ["pitch", "yaw", "roll"]:
-    create_slider(left_frame, axis.capitalize(),
-                 lambda v, a=axis: update_leg("left", a, v))
+    def create_slider(self, parent, text, command):
+        """Create a slider UI element."""
+        frame = tk.Frame(parent)
+        frame.pack(fill='x', pady=2)
+        
+        label = tk.Label(frame, text=text, width=10)
+        label.pack(side=tk.LEFT)
+        
+        slider = tk.Scale(frame, from_=-180, to=180, orient="horizontal", command=command)
+        slider.pack(side=tk.LEFT, fill='x', expand=True)
+        return slider
 
-# Right Leg Controls
-for axis in ["pitch", "yaw", "roll"]:
-    create_slider(right_frame, axis.capitalize(),
-                 lambda v, a=axis: update_leg("right", a, v))
+    def create_reset_button(self):
+        """Create a reset button to reset all values."""
+        reset_frame = tk.Frame(self.main_container)
+        reset_frame.pack(fill='x', pady=10)
 
-# Position Controls
-for axis in ["x", "y", "z"]:
-    create_slider(position_frame, f"{axis.upper()}-Pos",
-                 lambda v, a=axis: update_position(a, v))
+        reset_btn = tk.Button(reset_frame, text="Reset All", command=self.reset_all)
+        reset_btn.pack(expand=True, fill='x')
 
-# Reset Buttons Frame
-reset_frame = tk.Frame(main_container)
-reset_frame.pack(fill='x', pady=10)
+    def reset_all(self):
+        """Reset all sliders and data values to zero."""
+        for frame in [self.left_frame, self.right_frame]:
+            for widget in frame.winfo_children():
+                if isinstance(widget, tk.Frame):  # Each slider is in a frame
+                    for child in widget.winfo_children():
+                        if isinstance(child, tk.Scale):
+                            child.set(0)
+        self.send_data()
 
-def reset_all():
-    for frame in [left_frame, right_frame, position_frame]:
-        for widget in frame.winfo_children():
-            if isinstance(widget, tk.Frame):  # Each slider is in a frame
-                for child in widget.winfo_children():
-                    if isinstance(child, tk.Scale):
-                        child.set(0)
-    send_data()
+    def create_ip_config(self):
+        """Create the IP and port configuration section."""
+        ip_frame = tk.Frame(self.main_container)
+        ip_frame.pack(fill='x', pady=5)
 
-reset_btn = tk.Button(reset_frame, text="Reset All", command=reset_all)
-reset_btn.pack(expand=True, fill='x')
+        tk.Label(ip_frame, text="UDP IP:").pack(side=tk.LEFT)
+        self.ip_entry = tk.Entry(ip_frame)
+        self.ip_entry.insert(0, self.udp_handler.UDP_IP)
+        self.ip_entry.pack(side=tk.LEFT, fill='x', expand=True)
 
-# IP Configuration
-ip_frame = tk.Frame(main_container)
-ip_frame.pack(fill='x', pady=5)
+        tk.Label(ip_frame, text="Port:").pack(side=tk.LEFT)
+        self.port_entry = tk.Entry(ip_frame, width=10)
+        self.port_entry.insert(0, str(self.udp_handler.UDP_PORT))
+        self.port_entry.pack(side=tk.LEFT)
 
-tk.Label(ip_frame, text="UDP IP:").pack(side=tk.LEFT)
-ip_entry = tk.Entry(ip_frame)
-ip_entry.insert(0, UDP_IP)
-ip_entry.pack(side=tk.LEFT, fill='x', expand=True)
+        tk.Button(ip_frame, text="Update", command=self.update_connection).pack(side=tk.LEFT, padx=5)
 
-tk.Label(ip_frame, text="Port:").pack(side=tk.LEFT)
-port_entry = tk.Entry(ip_frame, width=10)
-port_entry.insert(0, str(UDP_PORT))
-port_entry.pack(side=tk.LEFT)
+    def update_connection(self):
+        """Update UDP connection settings."""
+        new_ip = self.ip_entry.get()
+        new_port = int(self.port_entry.get())
+        self.udp_handler.update_connection(new_ip, new_port)
+        self.status_label.config(text=f"Updated connection: {new_ip}:{new_port}")
 
-def update_connection():
-    global UDP_IP, UDP_PORT
-    UDP_IP = ip_entry.get()
-    UDP_PORT = int(port_entry.get())
-    status_label.config(text=f"Updated connection: {UDP_IP}:{UDP_PORT}")
-
-tk.Button(ip_frame, text="Update", command=update_connection).pack(side=tk.LEFT, padx=5)
-
-root.mainloop()
+if __name__ == "__main__":
+    MotionSimulator()
