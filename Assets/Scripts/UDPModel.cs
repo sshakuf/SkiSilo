@@ -40,6 +40,21 @@ public class UDPModel : MonoBehaviour
 
     public static event Action<Quaternion, Vector3, Quaternion, Vector3> OnDataReceived; // Left (rotation, acceleration) | Right (rotation, acceleration)
 
+     public static void OnDataReceivedInvoke(Quaternion leftRotation, Vector3 leftAcceleration, 
+                                           Quaternion rightRotation, Vector3 rightAcceleration)
+    {
+        // Invoke the static event in UDPModel
+        if (UDPModel.OnDataReceived != null)
+        {
+            OnDataReceived.Invoke(leftRotation, leftAcceleration, rightRotation, rightAcceleration);
+            // Debug.Log("UDPModel.OnDataReceived event invoked from HTTP sensor data");
+        }
+        else
+        {
+            // Debug.LogWarning("UDPModel.OnDataReceived is null. Make sure UDPModel is initialized.");
+        }
+    }
+
     private void Start()
     {
         Application.runInBackground = true;

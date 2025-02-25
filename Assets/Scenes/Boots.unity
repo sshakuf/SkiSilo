@@ -483,7 +483,7 @@ GameObject:
   m_Component:
   - component: {fileID: 1202390358}
   - component: {fileID: 1202390357}
-  - component: {fileID: 1202390356}
+  - component: {fileID: 1202390359}
   m_Layer: 0
   m_Name: GameObject
   m_TagString: Untagged
@@ -491,19 +491,6 @@ GameObject:
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
   m_IsActive: 1
---- !u!114 &1202390356
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1202390355}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 97e7328ca60594c84b483421b12e692c, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
-  port: 5005
 --- !u!114 &1202390357
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -532,6 +519,23 @@ Transform:
   m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &1202390359
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1202390355}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: cb23ea4a08e5948a08dc6995c0379a5a, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  serverAddress: http://0.0.0.0
+  serverPort: 8080
+  endpoint: /
+  autoUseLocalIP: 1
+  showGUI: 1
 --- !u!4 &1250376686 stripped
 Transform:
   m_CorrespondingSourceObject: {fileID: -8679921383154817045, guid: 4c7e9bbec79c54ed18cc0515cd66cc8c, type: 3}
