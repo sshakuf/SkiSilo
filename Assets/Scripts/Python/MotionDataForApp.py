@@ -7,7 +7,7 @@ from http.server import HTTPServer, BaseHTTPRequestHandler
 
 # Configuration constants
 ACC_SCALE_FACTOR = 100.0  # Scale factor for acceleration values
-MAX_ANGLE = 180.0  # Maximum angle value for pitch/yaw/roll
+MAX_ANGLE = 180.0         # Maximum angle value for pitch/yaw/roll
 
 # UDP Handler (copied from your example)
 class UDPHandler:
@@ -36,19 +36,33 @@ udp_handler = UDPHandler()
 
 class MotionDataHandler(BaseHTTPRequestHandler):
     def do_POST(self):
+        # Determine which leg based on the URL path
+        if self.path == '/left':
+            leg = 'left'
+        elif self.path == '/right':
+            leg = 'right'
+        else:
+            self.send_response(404)
+            self.send_header('Content-type', 'application/json')
+            self.end_headers()
+            self.wfile.write(json.dumps({'status': 'error', 'message': 'Unsupported endpoint'}).encode())
+            return
+        
         content_length = int(self.headers['Content-Length'])
         post_data = self.rfile.read(content_length)
         
         try:
             json_data = json.loads(post_data.decode('utf-8'))
-            print(f"Received data with {len(json_data.get('payload', []))} events")
+            num_events = len(json_data.get('payload', []))
+            print(f"Received data on {self.path} with {num_events} events")
             
-            # Put all events in the queue
+            # Add the leg info to each event and queue them
             if 'payload' in json_data:
                 for event in json_data['payload']:
+                    event['leg'] = leg
                     event_queue.put(event)
             
-            # Send a response
+            # Send a success response
             self.send_response(200)
             self.send_header('Content-type', 'application/json')
             self.end_headers()
@@ -64,21 +78,8 @@ class MotionDataHandler(BaseHTTPRequestHandler):
 def process_events():
     """
     Process events from the queue and forward them to the motion simulator.
+    The events are grouped by the leg (left/right) indicated by the HTTP endpoint.
     """
-    # Motion data structure (copied from your example)
-    motion_data = {
-        "legs": {
-            "left": {
-                "pitch": 0, "yaw": 0, "roll": 0,
-                "accX": 0, "accY": 0, "accZ": 0
-            },
-            "right": {
-                "pitch": 0, "yaw": 0, "roll": 0,
-                "accX": 0, "accY": 0, "accZ": 0
-            }
-        }
-    }
-
     while True:
         try:
             # Process events in batches
@@ -87,58 +88,78 @@ def process_events():
                 events_batch.append(event_queue.get_nowait())
             
             if not events_batch:
-                time.sleep(0.01)  # Sleep a bit if no events
+                time.sleep(0.01)
                 continue
-                
-            # Process the batch
+            
+            # Initialize data dictionaries for left and right legs
+            left_motion_data = {
+                "pitch": 0, "yaw": 0, "roll": 0,
+                "accX": 0, "accY": 0, "accZ": 0
+            }
+            right_motion_data = {
+                "pitch": 0, "yaw": 0, "roll": 0,
+                "accX": 0, "accY": 0, "accZ": 0
+            }
+            left_updated = False
+            right_updated = False
+            
             for event in events_batch:
+                leg = event.get('leg')
                 event_name = event.get('name', '')
                 values = event.get('values', {})
                 
-                if event_name == 'accelerometer':
-                    # Scale acceleration values and apply to left leg
-                    motion_data["legs"]["left"]["accX"] = values.get('x', 0) * ACC_SCALE_FACTOR
-                    motion_data["legs"]["left"]["accY"] = values.get('y', 0) * ACC_SCALE_FACTOR
-                    motion_data["legs"]["left"]["accZ"] = values.get('z', 0) * ACC_SCALE_FACTOR
-                    
-                elif event_name == 'orientation':
-                    # Ensure pitch/yaw/roll are within -180 to 180 range
-                    pitch = values.get('pitch', 0)
-                    yaw = values.get('yaw', 0)
-                    roll = values.get('roll', 0)
-                    
-                    # Convert radians to degrees if values are small (likely radians)
-                    if abs(pitch) < 3.15 and abs(yaw) < 3.15 and abs(roll) < 3.15:
-                        pitch = pitch * (180.0 / 3.14159)
-                        yaw = yaw * (180.0 / 3.14159)
-                        roll = roll * (180.0 / 3.14159)
-                    
-                    # Clamp values to -180 to 180 range
-                    motion_data["legs"]["left"]["pitch"] = max(-MAX_ANGLE, min(MAX_ANGLE, pitch))
-                    motion_data["legs"]["left"]["yaw"] = max(-MAX_ANGLE, min(MAX_ANGLE, yaw))
-                    motion_data["legs"]["left"]["roll"] = max(-MAX_ANGLE, min(MAX_ANGLE, roll))
-                    
-                elif event_name == 'gyroscope':
-                    # Scale gyroscope values and apply to right leg
-                    # Convert to degrees if in radians
-                    x = values.get('x', 0)
-                    y = values.get('y', 0)
-                    z = values.get('z', 0)
-                    
-                    # If values are small (likely radians), convert to degrees
-                    if abs(x) < 3.15 and abs(y) < 3.15 and abs(z) < 3.15:
-                        x = x * (180.0 / 3.14159)
-                        y = y * (180.0 / 3.14159)
-                        z = z * (180.0 / 3.14159)
-                    
-                    # Clamp values to -180 to 180 range
-                    motion_data["legs"]["right"]["pitch"] = max(-MAX_ANGLE, min(MAX_ANGLE, x))
-                    motion_data["legs"]["right"]["yaw"] = max(-MAX_ANGLE, min(MAX_ANGLE, y))
-                    motion_data["legs"]["right"]["roll"] = max(-MAX_ANGLE, min(MAX_ANGLE, z))
+                if leg == 'left':
+                    if event_name == 'accelerometer':
+                        # Scale acceleration values for left leg
+                        left_motion_data["accX"] = values.get('x', 0) * ACC_SCALE_FACTOR
+                        left_motion_data["accY"] = values.get('y', 0) * ACC_SCALE_FACTOR
+                        left_motion_data["accZ"] = values.get('z', 0) * ACC_SCALE_FACTOR
+                        left_updated = True
+                    elif event_name == 'orientation':
+                        pitch = values.get('pitch', 0)
+                        yaw = values.get('yaw', 0)
+                        roll = values.get('roll', 0)
+                        
+                        # Convert radians to degrees if values are small
+                        if abs(pitch) < 3.15 and abs(yaw) < 3.15 and abs(roll) < 3.15:
+                            pitch = pitch * (180.0 / 3.14159)
+                            yaw = yaw * (180.0 / 3.14159)
+                            roll = roll * (180.0 / 3.14159)
+                        
+                        # Clamp values to -180 to 180
+                        left_motion_data["pitch"] = max(-MAX_ANGLE, min(MAX_ANGLE, pitch))
+                        left_motion_data["yaw"] = max(-MAX_ANGLE, min(MAX_ANGLE, yaw))
+                        left_motion_data["roll"] = max(-MAX_ANGLE, min(MAX_ANGLE, roll))
+                        left_updated = True
+                
+                elif leg == 'right':
+                    if event_name == 'gyroscope':
+                        x = values.get('x', 0)
+                        y = values.get('y', 0)
+                        z = values.get('z', 0)
+                        
+                        # Convert to degrees if in radians
+                        if abs(x) < 3.15 and abs(y) < 3.15 and abs(z) < 3.15:
+                            x = x * (180.0 / 3.14159)
+                            y = y * (180.0 / 3.14159)
+                            z = z * (180.0 / 3.14159)
+                        
+                        # Clamp values to -180 to 180
+                        right_motion_data["pitch"] = max(-MAX_ANGLE, min(MAX_ANGLE, x))
+                        right_motion_data["yaw"] = max(-MAX_ANGLE, min(MAX_ANGLE, y))
+                        right_motion_data["roll"] = max(-MAX_ANGLE, min(MAX_ANGLE, z))
+                        right_updated = True
             
-            # Send the processed data
-            udp_handler.send_data(motion_data)
-            print(f"Sent motion data: {motion_data}")
+            # Send UDP data only for the updated leg(s)
+            if left_updated:
+                udp_data_left = {"leg": "left", "data": left_motion_data}
+                udp_handler.send_data(udp_data_left)
+                print(f"Sent left motion data: {udp_data_left}")
+            
+            if right_updated:
+                udp_data_right = {"leg": "right", "data": right_motion_data}
+                udp_handler.send_data(udp_data_right)
+                print(f"Sent right motion data: {udp_data_right}")
             
             time.sleep(0.01)
             # Mark events as processed
@@ -147,7 +168,7 @@ def process_events():
                 
         except Exception as e:
             print(f"Error in event processing: {e}")
-            time.sleep(0.1)  # Sleep on error
+            time.sleep(0.1)
 
 def run_server(server_class=HTTPServer, handler_class=MotionDataHandler, port=8080):
     """
@@ -163,8 +184,8 @@ if __name__ == "__main__":
     processing_thread = threading.Thread(target=process_events, daemon=True)
     processing_thread.start()
     
-    # Configure UDP connection (you can modify these settings)
+    # Configure UDP connection (modify these settings if needed)
     udp_handler.update_connection("127.0.0.1", 5005)
     
-    # Start the server
+    # Start the HTTP server
     run_server()

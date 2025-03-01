@@ -38,8 +38,11 @@ public class UDPModel : MonoBehaviour
     private bool isRunning = true;
     private readonly Queue<Action> _mainThreadActions = new Queue<Action>();
 
+    // Original event for both legs - kept exactly as is
     public static event Action<Quaternion, Vector3, Quaternion, Vector3> OnDataReceived; // Left (rotation, acceleration) | Right (rotation, acceleration)
+    
 
+    // Original method - kept exactly as is
      public static void OnDataReceivedInvoke(Quaternion leftRotation, Vector3 leftAcceleration, 
                                            Quaternion rightRotation, Vector3 rightAcceleration)
     {
@@ -54,6 +57,7 @@ public class UDPModel : MonoBehaviour
             // Debug.LogWarning("UDPModel.OnDataReceived is null. Make sure UDPModel is initialized.");
         }
     }
+    
 
     private void Start()
     {
@@ -123,33 +127,47 @@ public class UDPModel : MonoBehaviour
             
             if (motionData.legs != null)
             {
-                // Left leg data
-                Quaternion leftRotation = Quaternion.Euler(
-                    motionData.legs.left.pitch,
-                    motionData.legs.left.yaw,
-                    motionData.legs.left.roll
-                );
-
-                Vector3 leftAcceleration = new Vector3(
-                    motionData.legs.left.accX,
-                    motionData.legs.left.accY,
-                    motionData.legs.left.accZ
-                );
-
-                // Right leg data
-                Quaternion rightRotation = Quaternion.Euler(
-                    motionData.legs.right.pitch,
-                    motionData.legs.right.yaw,
-                    motionData.legs.right.roll
-                );
-
-                Vector3 rightAcceleration = new Vector3(
-                    motionData.legs.right.accX,
-                    motionData.legs.right.accY,
-                    motionData.legs.right.accZ
-                );
-
-                OnDataReceived?.Invoke(leftRotation, leftAcceleration, rightRotation, rightAcceleration);
+                // Set default values for both legs
+                Quaternion leftRotation = Quaternion.identity;
+                Vector3 leftAcceleration = Vector3.zero;
+                Quaternion rightRotation = Quaternion.identity;
+                Vector3 rightAcceleration = Vector3.zero;
+                
+                // Check if left leg data exists and update if present
+                if (motionData.legs.left != null)
+                {
+                    leftRotation = Quaternion.Euler(
+                        motionData.legs.left.pitch,
+                        motionData.legs.left.yaw,
+                        motionData.legs.left.roll
+                    );
+                    leftAcceleration = new Vector3(
+                        motionData.legs.left.accX,
+                        motionData.legs.left.accY,
+                        motionData.legs.left.accZ
+                    );
+                }
+                
+                // Check if right leg data exists and update if present
+                if (motionData.legs.right != null)
+                {
+                    rightRotation = Quaternion.Euler(
+                        motionData.legs.right.pitch,
+                        motionData.legs.right.yaw,
+                        motionData.legs.right.roll
+                    );
+                    rightAcceleration = new Vector3(
+                        motionData.legs.right.accX,
+                        motionData.legs.right.accY,
+                        motionData.legs.right.accZ
+                    );
+                }
+                
+                // Only invoke the event if at least one leg's data is present
+                if (motionData.legs.left != null || motionData.legs.right != null)
+                {
+                    OnDataReceived?.Invoke(leftRotation, leftAcceleration, rightRotation, rightAcceleration);
+                }
             }
         }
         catch (Exception e)

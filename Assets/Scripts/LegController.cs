@@ -52,22 +52,61 @@ public class LegController : MonoBehaviour
 
     private void HandleNewMotionData(Quaternion leftRotation, Vector3 leftAcc, Quaternion rightRotation, Vector3 rightAcc)
     {
-        if (leftLeg) 
+        bool updatedRotation = false;
+        bool updatedAcceleration = false;
+        
+        if (leftLeg)
         {
-            targetLeftRotation = initialLeftRotation * leftRotation;
-            leftAcceleration = leftAcc * accelerationScale;
+            if (leftRotation != Quaternion.identity)
+            {
+                targetLeftRotation = initialLeftRotation * leftRotation;
+                updatedRotation = true;
+            }
+            if (leftAcc != Vector3.zero)
+            {
+                leftAcceleration = leftAcc * accelerationScale;
+                updatedAcceleration = true;
+            }
         }
 
-        if (rightLeg) 
+        if (rightLeg)
         {
-            targetRightRotation = initialRightRotation * rightRotation;
-            rightAcceleration = rightAcc * accelerationScale;
+            if (rightRotation != Quaternion.identity)
+            {
+                targetRightRotation = initialRightRotation * rightRotation;
+                updatedRotation = true;
+            }
+            if (rightAcc != Vector3.zero)
+            {
+                rightAcceleration = rightAcc * accelerationScale;
+                updatedAcceleration = true;
+            }
         }
 
-        hasNewRotationData = true;
-        hasNewAccelerationData = true;
+        // If both legs are present and both rotations are default, force an update.
+        if (leftRotation == Quaternion.identity && rightRotation == Quaternion.identity)
+        {
+            targetLeftRotation = initialLeftRotation;
+            targetRightRotation = initialRightRotation;
+            updatedRotation = true;
+        }
+
+        if (leftAcc == Vector3.zero && rightAcc == Vector3.zero)
+        {
+            leftAcceleration = Vector3.zero;
+            rightAcceleration = Vector3.zero;
+            updatedAcceleration = true;
+        }
+
+        if (updatedRotation)
+        {
+            hasNewRotationData = true;
+        }
+        if (updatedAcceleration)
+        {
+            hasNewAccelerationData = true;
+        }
     }
-
     private void LateUpdate()
     {
         if (hasNewRotationData)
