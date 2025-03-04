@@ -9,7 +9,10 @@ public class LegController : MonoBehaviour
     [Header("Motion Settings")]
     [SerializeField] private float smoothing = 10f;
     [SerializeField] private float accelerationScale = 1f; // Scale for acceleration movement
-    [SerializeField] private float returnSpeed = 5f; // Speed to return to the base position
+    [SerializeField] private float gravityScale = 0.5f;    // Scale for gravity influence
+    [SerializeField] private float returnSpeed = 5f;       // Speed to return to the base position
+    [SerializeField] private bool useGravityData = true;   // Toggle to enable/disable gravity influence
+    [SerializeField] private bool useGravityForAngle = true; // Toggle to use gravity for angle calculation
 
     private Quaternion initialLeftRotation;
     private Quaternion initialRightRotation;
@@ -22,9 +25,13 @@ public class LegController : MonoBehaviour
 
     private Vector3 leftAcceleration;
     private Vector3 rightAcceleration;
+    
+    private Vector3 leftGravity;
+    private Vector3 rightGravity;
 
     private bool hasNewRotationData = false;
     private bool hasNewAccelerationData = false;
+    private bool hasNewGravityData = false;
 
     private void Start()
     {
@@ -38,30 +45,71 @@ public class LegController : MonoBehaviour
             initialRightRotation = rightLeg.rotation;
             initialRightPosition = rightLeg.position;
         }
+        
+        // Initialize gravity vectors
+        leftGravity = Vector3.zero;
+        rightGravity = Vector3.zero;
     }
 
     private void OnEnable()
     {
-        UDPModel.OnDataReceived += HandleNewMotionData;
+        // Subscribe to the single combined event
+        UDPModel.OnDataReceived += HandleMotionData;
     }
 
     private void OnDisable()
     {
-        UDPModel.OnDataReceived -= HandleNewMotionData;
+        // Unsubscribe from the event
+        UDPModel.OnDataReceived -= HandleMotionData;
     }
-
-    private void HandleNewMotionData(Quaternion leftRotation, Vector3 leftAcc, Quaternion rightRotation, Vector3 rightAcc)
+    
+    // Convert gravity values (-1 to 1) to angles (-180 to 180)
+    private Quaternion GravityToRotation(Vector3 gravity)
+    {
+        // Calculate pitch and roll based on gravity
+        // Gravity is inverted for intuitive rotation (negative gravity = positive angle)
+        float pitchAngle = Mathf.Asin(-gravity.x) * Mathf.Rad2Deg; // Convert to degrees
+        float rollAngle = Mathf.Asin(gravity.z) * Mathf.Rad2Deg;  // Convert to degrees
+        
+        // Use atan2 for more accurate angle when possible
+        if (Mathf.Abs(gravity.y) > 0.001f)
+        {
+            pitchAngle = Mathf.Atan2(-gravity.x, Mathf.Abs(gravity.y)) * Mathf.Rad2Deg;
+            rollAngle = Mathf.Atan2(gravity.z, Mathf.Abs(gravity.y)) * Mathf.Rad2Deg;
+        }
+        
+        // Create a rotation from these angles (pitch = X-axis, roll = Z-axis)
+        return Quaternion.Euler(pitchAngle, 0, rollAngle);
+    }
+    
+    // Single handler for all motion data including gravity
+    private void HandleMotionData(Quaternion leftRotation, Vector3 leftAcc, Vector3 leftGrav, 
+                                 Quaternion rightRotation, Vector3 rightAcc, Vector3 rightGrav)
     {
         bool updatedRotation = false;
         bool updatedAcceleration = false;
+        bool updatedGravity = false;
         
         if (leftLeg)
         {
-            if (leftRotation != Quaternion.identity)
+            if (useGravityForAngle && leftGrav != Vector3.zero)
             {
+                // Use gravity to determine rotation
+                Quaternion gravityRotation = GravityToRotation(leftGrav);
+                targetLeftRotation = initialLeftRotation * gravityRotation;
+                updatedRotation = true;
+                
+                // Store gravity for position effects if needed
+                leftGravity = leftGrav * gravityScale;
+                updatedGravity = true;
+            }
+            else if (leftRotation != Quaternion.identity)
+            {
+                // Use explicit rotation from gyroscope data
                 targetLeftRotation = initialLeftRotation * leftRotation;
                 updatedRotation = true;
             }
+            
             if (leftAcc != Vector3.zero)
             {
                 leftAcceleration = leftAcc * accelerationScale;
@@ -71,11 +119,24 @@ public class LegController : MonoBehaviour
 
         if (rightLeg)
         {
-            if (rightRotation != Quaternion.identity)
+            if (useGravityForAngle && rightGrav != Vector3.zero)
             {
+                // Use gravity to determine rotation
+                Quaternion gravityRotation = GravityToRotation(rightGrav);
+                targetRightRotation = initialRightRotation * gravityRotation;
+                updatedRotation = true;
+                
+                // Store gravity for position effects if needed
+                rightGravity = rightGrav * gravityScale;
+                updatedGravity = true;
+            }
+            else if (rightRotation != Quaternion.identity)
+            {
+                // Use explicit rotation from gyroscope data
                 targetRightRotation = initialRightRotation * rightRotation;
                 updatedRotation = true;
             }
+            
             if (rightAcc != Vector3.zero)
             {
                 rightAcceleration = rightAcc * accelerationScale;
@@ -83,14 +144,7 @@ public class LegController : MonoBehaviour
             }
         }
 
-        // If both legs are present and both rotations are default, force an update.
-        if (leftRotation == Quaternion.identity && rightRotation == Quaternion.identity)
-        {
-            targetLeftRotation = initialLeftRotation;
-            targetRightRotation = initialRightRotation;
-            updatedRotation = true;
-        }
-
+        // Reset acceleration if both are zero
         if (leftAcc == Vector3.zero && rightAcc == Vector3.zero)
         {
             leftAcceleration = Vector3.zero;
@@ -98,6 +152,7 @@ public class LegController : MonoBehaviour
             updatedAcceleration = true;
         }
 
+        // Update state flags
         if (updatedRotation)
         {
             hasNewRotationData = true;
@@ -106,7 +161,12 @@ public class LegController : MonoBehaviour
         {
             hasNewAccelerationData = true;
         }
+        if (updatedGravity)
+        {
+            hasNewGravityData = true;
+        }
     }
+
     private void LateUpdate()
     {
         if (hasNewRotationData)
@@ -130,24 +190,40 @@ public class LegController : MonoBehaviour
             }
         }
 
-        if (hasNewAccelerationData)
+        if (hasNewAccelerationData || hasNewGravityData)
         {
-            ApplyAccelerationEffects();
+            ApplyMotionEffects();
         }
 
         ReturnToBasePosition();
     }
 
-    private void ApplyAccelerationEffects()
+    private void ApplyMotionEffects()
     {
         if (leftLeg)
         {
-            leftLeg.position = initialLeftPosition + leftAcceleration;
+            Vector3 combinedEffect = leftAcceleration;
+            
+            // Apply gravity effect if enabled and not using it for rotation
+            if (useGravityData && !useGravityForAngle && hasNewGravityData)
+            {
+                combinedEffect += leftGravity;
+            }
+            
+            leftLeg.position = initialLeftPosition + combinedEffect;
         }
 
         if (rightLeg)
         {
-            rightLeg.position = initialRightPosition + rightAcceleration;
+            Vector3 combinedEffect = rightAcceleration;
+            
+            // Apply gravity effect if enabled and not using it for rotation
+            if (useGravityData && !useGravityForAngle && hasNewGravityData)
+            {
+                combinedEffect += rightGravity;
+            }
+            
+            rightLeg.position = initialRightPosition + combinedEffect;
         }
     }
 

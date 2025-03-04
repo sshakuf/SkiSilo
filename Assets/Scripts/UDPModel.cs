@@ -15,49 +15,50 @@ public class MotionData
 [Serializable]
 public class LegsData
 {
-    public RotationData left;
-    public RotationData right;
+    public LegData left;
+    public LegData right;
 }
 
 [Serializable]
-public class RotationData
+public class LegData
 {
-    public float pitch;
     public float yaw;
+    public float pitch;
     public float roll;
-    public float accX;
-    public float accY;
-    public float accZ;
+    public AccelerationData acc;
+    public AccelerationData gravity;
+}
+
+[Serializable]
+public class AccelerationData
+{
+    public float x;
+    public float y;
+    public float z;
 }
 
 public class UDPModel : MonoBehaviour
 {
-    [SerializeField] private int port = 5005;
+    [SerializeField] private int port = 5555; // Match the port in the Python code
     private UdpClient udpClient;
     private Thread receiveThread;
     private bool isRunning = true;
     private readonly Queue<Action> _mainThreadActions = new Queue<Action>();
 
-    // Original event for both legs - kept exactly as is
-    public static event Action<Quaternion, Vector3, Quaternion, Vector3> OnDataReceived; // Left (rotation, acceleration) | Right (rotation, acceleration)
-    
+    // Single combined event that includes all data (rotation, acceleration, gravity)
+    public static event Action<Quaternion, Vector3, Vector3, Quaternion, Vector3, Vector3> OnDataReceived; 
+    // Parameters: leftRotation, leftAcceleration, leftGravity, rightRotation, rightAcceleration, rightGravity
 
-    // Original method - kept exactly as is
-     public static void OnDataReceivedInvoke(Quaternion leftRotation, Vector3 leftAcceleration, 
+    // Legacy method signature kept for compatibility with external code
+    public static void OnDataReceivedInvoke(Quaternion leftRotation, Vector3 leftAcceleration, 
                                            Quaternion rightRotation, Vector3 rightAcceleration)
     {
-        // Invoke the static event in UDPModel
-        if (UDPModel.OnDataReceived != null)
+        // Call the new combined event with zero gravity vectors when invoked externally
+        if (OnDataReceived != null)
         {
-            OnDataReceived.Invoke(leftRotation, leftAcceleration, rightRotation, rightAcceleration);
-            // Debug.Log("UDPModel.OnDataReceived event invoked from HTTP sensor data");
-        }
-        else
-        {
-            // Debug.LogWarning("UDPModel.OnDataReceived is null. Make sure UDPModel is initialized.");
+            OnDataReceived.Invoke(leftRotation, leftAcceleration, Vector3.zero, rightRotation, rightAcceleration, Vector3.zero);
         }
     }
-    
 
     private void Start()
     {
@@ -125,15 +126,21 @@ public class UDPModel : MonoBehaviour
         {
             MotionData motionData = JsonUtility.FromJson<MotionData>(json);
             
+            // Set default values for both legs
+            Quaternion leftRotation = Quaternion.identity;
+            Vector3 leftAcceleration = Vector3.zero;
+            Vector3 leftGravity = Vector3.zero;
+            
+            Quaternion rightRotation = Quaternion.identity;
+            Vector3 rightAcceleration = Vector3.zero;
+            Vector3 rightGravity = Vector3.zero;
+            
+            bool hasValidData = false;
+            
+            // Check if legs data exists
             if (motionData.legs != null)
             {
-                // Set default values for both legs
-                Quaternion leftRotation = Quaternion.identity;
-                Vector3 leftAcceleration = Vector3.zero;
-                Quaternion rightRotation = Quaternion.identity;
-                Vector3 rightAcceleration = Vector3.zero;
-                
-                // Check if left leg data exists and update if present
+                // Process left leg data if available
                 if (motionData.legs.left != null)
                 {
                     leftRotation = Quaternion.Euler(
@@ -141,14 +148,29 @@ public class UDPModel : MonoBehaviour
                         motionData.legs.left.yaw,
                         motionData.legs.left.roll
                     );
-                    leftAcceleration = new Vector3(
-                        motionData.legs.left.accX,
-                        motionData.legs.left.accY,
-                        motionData.legs.left.accZ
-                    );
+                    
+                    if (motionData.legs.left.acc != null)
+                    {
+                        leftAcceleration = new Vector3(
+                            motionData.legs.left.acc.x,
+                            motionData.legs.left.acc.y,
+                            motionData.legs.left.acc.z
+                        );
+                    }
+                    
+                    if (motionData.legs.left.gravity != null)
+                    {
+                        leftGravity = new Vector3(
+                            motionData.legs.left.gravity.x,
+                            motionData.legs.left.gravity.y,
+                            motionData.legs.left.gravity.z
+                        );
+                    }
+                    
+                    hasValidData = true;
                 }
                 
-                // Check if right leg data exists and update if present
+                // Process right leg data if available
                 if (motionData.legs.right != null)
                 {
                     rightRotation = Quaternion.Euler(
@@ -156,18 +178,33 @@ public class UDPModel : MonoBehaviour
                         motionData.legs.right.yaw,
                         motionData.legs.right.roll
                     );
-                    rightAcceleration = new Vector3(
-                        motionData.legs.right.accX,
-                        motionData.legs.right.accY,
-                        motionData.legs.right.accZ
-                    );
+                    
+                    if (motionData.legs.right.acc != null)
+                    {
+                        rightAcceleration = new Vector3(
+                            motionData.legs.right.acc.x,
+                            motionData.legs.right.acc.y,
+                            motionData.legs.right.acc.z
+                        );
+                    }
+                    
+                    if (motionData.legs.right.gravity != null)
+                    {
+                        rightGravity = new Vector3(
+                            motionData.legs.right.gravity.x,
+                            motionData.legs.right.gravity.y,
+                            motionData.legs.right.gravity.z
+                        );
+                    }
+                    
+                    hasValidData = true;
                 }
-                
-                // Only invoke the event if at least one leg's data is present
-                if (motionData.legs.left != null || motionData.legs.right != null)
-                {
-                    OnDataReceived?.Invoke(leftRotation, leftAcceleration, rightRotation, rightAcceleration);
-                }
+            }
+            
+            // Only invoke the event if at least one leg's data is present
+            if (hasValidData && OnDataReceived != null)
+            {
+                OnDataReceived.Invoke(leftRotation, leftAcceleration, leftGravity, rightRotation, rightAcceleration, rightGravity);
             }
         }
         catch (Exception e)

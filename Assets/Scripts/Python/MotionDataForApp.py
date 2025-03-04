@@ -85,7 +85,7 @@ def process_events():
     """
     Process events from the queue and forward them via UDP.
     Each UDP message now contains a JSON object with a 'legs' key,
-    containing either the left or right leg's data.
+    containing either the left or right leg's data, including gravity.
     """
     while True:
         try:
@@ -98,27 +98,45 @@ def process_events():
                 time.sleep(0.001)
                 continue
             
-            # Initialize data dictionaries for both legs
+            # Initialize data dictionaries for both legs with nested structure
             _data = {
-                "pitch": 0, "yaw": 0, "roll": 0,
-                "accX": 0, "accY": 0, "accZ": 0
+                "yaw": 0.0, 
+                "pitch": 0.0, 
+                "roll": 0.0,
+                "acc": {
+                    "x": 0.0, 
+                    "y": 0.0, 
+                    "z": 0.0
+                },
+                "gravity": {
+                    "x": 0.0, 
+                    "y": 0.0, 
+                    "z": 0.0
+                }
             }
             
             _updated = False
-            #print(f"Processing {len(events_batch)} events")
-
+            _gravity_updated = False
+            
             for event in events_batch:
                 leg = event.get('leg')
                 event_name = event.get('name', '')
                 values = event.get('values', {})
                 
-                    
                 if event_name == 'accelerometer':
-                    # Scale acceleration values for left leg
-                    _data["accX"] = values.get('x', 0) * ACC_SCALE_FACTOR
-                    _data["accY"] = values.get('y', 0) * ACC_SCALE_FACTOR
-                    _data["accZ"] = values.get('z', 0) * ACC_SCALE_FACTOR
-                    left_updated = True
+                    # Set acceleration values in the nested structure
+                    _data["acc"]["x"] = values.get('x', 0) * ACC_SCALE_FACTOR
+                    _data["acc"]["y"] = values.get('y', 0) * ACC_SCALE_FACTOR
+                    _data["acc"]["z"] = values.get('z', 0) * ACC_SCALE_FACTOR
+                    _updated = True
+                    
+                elif event_name == 'gravity':
+                    # Set gravity values in the nested structure
+                    _data["gravity"]["x"] = values.get('x', 0)
+                    _data["gravity"]["y"] = values.get('y', 0)
+                    _data["gravity"]["z"] = values.get('z', 0)
+                    _gravity_updated = True
+                    
                 elif event_name == 'orientation':
                     pitch = values.get('pitch', 0)
                     yaw = values.get('yaw', 0)
@@ -135,25 +153,17 @@ def process_events():
                     _data["roll"] = max(-MAX_ANGLE, min(MAX_ANGLE, roll))
                     _updated = True
             
-                # Send UDP data only for the updated leg(s) with the nested 'legs' structure
-                if leg == 'left':
-                    if _updated:
-                        udp_message = {"legs": {"left": _data}}
-                        udp_handler.send_data(udp_message)
-                        #print(f"Sent left UDP: {udp_message}")
- 
-                elif leg == 'right':
-                    if _updated:
-                        udp_message = {"legs": {"right": _data}}
-                        udp_handler.send_data(udp_message)
-                        #print(f"Sent right UDP: {udp_message}")
-            
-                time.sleep(0.001)
+            # Send UDP data only for the updated leg with the nested structure
+            if (_updated or _gravity_updated) and leg:
+                udp_message = {"legs": {leg: _data}}
+                udp_handler.send_data(udp_message)
+                #print(f"Sent {leg} UDP: {udp_message}")
+                
+            time.sleep(0.001)
 
             # Mark events as processed
             for _ in events_batch:
                 event_queue.task_done()
-                
                 
         except Exception as e:
             print(f"Error in event processing: {e}")
